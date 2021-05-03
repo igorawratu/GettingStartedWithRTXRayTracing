@@ -22,6 +22,7 @@
     <ClCompile Include="..\SharedUtils\ResourceManager.cpp" />
     <ClCompile Include="..\SharedUtils\SceneLoaderWrapper.cpp" />
     <ClCompile Include="..\SharedUtils\SimpleVars.cpp" />
+    <ClCompile Include="CameraMoveAcc.cpp" />
     <ClCompile Include="Passes\GGXGlobalIllumination.cpp" />
     <ClCompile Include="Tutor14-GGXGlobalIllumination.cpp" />
   </ItemGroup>
@@ -37,6 +38,7 @@
     <ClInclude Include="..\SharedUtils\ResourceManager.h" />
     <ClInclude Include="..\SharedUtils\SceneLoaderWrapper.h" />
     <ClInclude Include="..\SharedUtils\SimpleVars.h" />
+    <ClInclude Include="CameraMoveAcc.h" />
     <ClInclude Include="Passes\GGXGlobalIllumination.h" />
   </ItemGroup>
   <ItemGroup>
