@@ -33,7 +33,7 @@ public:
 	virtual ~CameraMoveAccPass() = default;
 
 protected:
-	CameraMoveAccPass(const std::string &bufferToAccumulate, std::uint8_t buffer_size);
+	CameraMoveAccPass(const std::string &bufferToAccumulate);
 
 	// Implementation of SimpleRenderPass interface
 	bool initialize(RenderContext* pRenderContext, ResourceManager::SharedPtr pResManager) override;
@@ -55,14 +55,21 @@ protected:
 
 	// State for our accumulation shader
 	FullscreenLaunch::SharedPtr   mpAccumShader;
+	FullscreenLaunch::SharedPtr   mpSampleUpdateShader;
+	FullscreenLaunch::SharedPtr   mpNormalWoStoreShader;
+	FullscreenLaunch::SharedPtr   mpDepthRoughnessStoreShader;
+
 	GraphicsState::SharedPtr      mpGfxState;
 	Texture::SharedPtr mpAccumFrame;
+	std::array<Texture::SharedPtr, 2> mpSUpdatePingPong;
 	std::vector<Texture::SharedPtr> mpLastFrames;
-	std::vector<Texture::SharedPtr> mpLastFramesOffset;
+	std::vector<Texture::SharedPtr> mpLastFramesMat1;
+	std::vector<Texture::SharedPtr> mpLastFramesMat2;
+	std::vector<Camera::SharedPtr> mpLastCameras;
 	std::uint8_t mbCurrentBufferPos;
-	std::uint8_t mbMaxBufferSize;
 	std::uint8_t mbCurrentBufferSize;
 	Fbo::SharedPtr                mpInternalFbo;
+	Fbo::SharedPtr                mpDepthRoughnessFbo;
 
 	// We stash a copy of our current scene.  Why?  To detect if changes have occurred.
 	Scene::SharedPtr              mpScene;
