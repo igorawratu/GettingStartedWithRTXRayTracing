@@ -154,7 +154,7 @@ void CameraMoveAccPass::execute(RenderContext* pRenderContext)
 		//backproject last frame positions and update accum texture here with reweight etc.
 		auto supdateVars = mpSampleUpdateShader->getVars();
 
-		supdateVars["SUpdateCB"]["gCurrentBufferSize"] = mbCurrentBufferSize;
+		supdateVars["SUpdateCB"]["gCurrentBufferSize"] = int(mbCurrentBufferSize);
 		supdateVars["gPos"] = mpResManager->getTexture("WorldPosition");
 
 		for (std::uint8_t i = 0; i < mbCurrentBufferSize; ++i) {
@@ -200,7 +200,7 @@ void CameraMoveAccPass::execute(RenderContext* pRenderContext)
 
 	// Set shader parameters for our accumulation
 	auto accumVars = mpAccumShader->getVars();
-	accumVars["PerFrameCB"]["gAccumCount"] = mAccumCount++;
+	accumVars["PerFrameCB"]["gAccumCount"] = int(mAccumCount++);
 	accumVars["gLastFrame"] = mpAccumFrame;
 	accumVars["gCurFrame"] = inputTexture;
 
