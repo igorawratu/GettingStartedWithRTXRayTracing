@@ -1,3 +1,7 @@
+#include "HostDeviceSharedMacros.h"
+
+import ShaderCommon;
+
 Texture2D<float4>   worldpos;
 Texture2D<float4>   normals;
 

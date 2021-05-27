@@ -1,3 +1,7 @@
+#include "HostDeviceSharedMacros.h"
+
+import ShaderCommon;
+
 cbuffer SUpdateCB
 {
 	int gCurrentBufferSize;
@@ -18,4 +22,6 @@ float4 main(float2 texC : TEXCOORD, float4 pos : SV_Position) : SV_Target0
 	//see which pixel this would have corresponded to in the previous camera render
 	
 	//update the sample at that pixel with the various sample update strategies and blend that with the prevaccum if gUsePrevBuffer is set and return the output
+
+	return float4(0, 0, 0, 0);
 }
