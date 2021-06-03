@@ -56,20 +56,20 @@ protected:
 	// State for our accumulation shader
 	FullscreenLaunch::SharedPtr   mpAccumShader;
 	FullscreenLaunch::SharedPtr   mpSampleUpdateShader;
-	FullscreenLaunch::SharedPtr   mpNormalWoStoreShader;
-	FullscreenLaunch::SharedPtr   mpDepthRoughnessStoreShader;
+	FullscreenLaunch::SharedPtr   mpInfoStoreShader;
 
 	GraphicsState::SharedPtr      mpGfxState;
 	Texture::SharedPtr mpAccumFrame;
 	std::array<Texture::SharedPtr, 2> mpSUpdatePingPong;
-	std::vector<Texture::SharedPtr> mpLastFrames;
-	std::vector<Texture::SharedPtr> mpLastFramesMat1;
-	std::vector<Texture::SharedPtr> mpLastFramesMat2;
+	std::vector<Texture::SharedPtr> mpLastFrameRenders;
+	std::vector<Texture::SharedPtr> mpLastFrameDepthRough;
+	std::vector<Texture::SharedPtr> mpLastFrameNorm;
+	std::vector<Texture::SharedPtr> mpLastFrameDirect;
+	std::vector<Texture::SharedPtr> mpLastFrameWo;
 	std::vector<Camera::SharedPtr> mpLastCameras;
 	std::uint8_t mbCurrentBufferPos;
 	std::uint8_t mbCurrentBufferSize;
 	Fbo::SharedPtr                mpInternalFbo;
-	Fbo::SharedPtr                mpDepthRoughnessFbo;
 
 	// We stash a copy of our current scene.  Why?  To detect if changes have occurred.
 	Scene::SharedPtr              mpScene;
@@ -82,4 +82,7 @@ protected:
 	std::uint8_t                  mAccumCount = 0;
 	std::uint8_t				  mFirstFramePosition = 0;
 	std::uint8_t				  mTotalAccFrames;
+
+	int width_ = 1, height_ = 1;
+	float depth_thresh_;
 };

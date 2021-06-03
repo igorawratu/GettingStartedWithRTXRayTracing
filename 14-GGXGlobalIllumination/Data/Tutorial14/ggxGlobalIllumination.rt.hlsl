@@ -46,6 +46,8 @@ shared Texture2D<float4>   gExtraMatl;
 shared Texture2D<float4>   gEnvMap;
 shared Texture2D<float4>   gEmissive;
 shared RWTexture2D<float4> gOutput;
+shared RWTexture2D<float4> gDirect;
+shared RWTexture2D<float4> gFhwo;
 
 // A separate file with some simple utility functions: getPerpendicularVector(), initRand(), nextRand()
 #include "ggxGlobalIlluminationUtils.hlsli"
@@ -114,16 +116,26 @@ void SimpleDiffuseGIRayGen()
 	{
         // Add any emissive color from primary rays
         shadeColor = gEmitMult * pixelEmissive.rgb;
+		float3 directIllum = float3(0, 0, 0);
 
 		// (Optionally) do explicit direct lighting to a random light in the scene
 		if (gDoDirectGI)
-			shadeColor += ggxDirect(randSeed, worldPos.xyz, worldNorm.xyz, V,
+			directIllum = ggxDirect(randSeed, worldPos.xyz, worldNorm.xyz, V,
 				                   difMatlColor.rgb, specMatlColor.rgb, roughness);
+		
+		//needed for reweighting as we can't reweight the direct portion of the sample
+		shadeColor += directIllum;
+		gDirect[launchIndex] = float4(directIllum, 1);
 
 		// (Optionally) do indirect lighting for global illumination
-		if (gDoIndirectGI && (gMaxDepth > 0))
+		if (gDoIndirectGI && (gMaxDepth > 0)) {
+			float3 wo;
+
 			shadeColor += ggxIndirect(randSeed, worldPos.xyz, worldNorm.xyz, noMapN,
-				                      V, difMatlColor.rgb, specMatlColor.rgb, roughness, 0);
+				V, difMatlColor.rgb, specMatlColor.rgb, roughness, 0, wo);
+			gFhwo[launchIndex] = float4(normalize(wo), 1);
+		}
+			
 	}
 	
 	// Since we didn't do a good job above catching NaN's, div by 0, infs, etc.,

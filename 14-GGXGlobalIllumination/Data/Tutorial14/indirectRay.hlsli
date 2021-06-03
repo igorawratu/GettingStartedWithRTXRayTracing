@@ -136,7 +136,7 @@ float3 ggxDirect(inout uint rndSeed, float3 hit, float3 N, float3 V, float3 dif,
 	return shadowMult * lightIntensity * ( /* NdotL * */ ggxTerm + NdotL * dif / M_PI);
 }
 
-float3 ggxIndirect(inout uint rndSeed, float3 hit, float3 N, float3 noNormalN, float3 V, float3 dif, float3 spec, float rough, uint rayDepth)
+float3 ggxIndirect(inout uint rndSeed, float3 hit, float3 N, float3 noNormalN, float3 V, float3 dif, float3 spec, float rough, uint rayDepth, out float3 wo)
 {
 	// We have to decide whether we sample our diffuse or specular/ggx lobe.
 	float probDiffuse = probabilityToSampleDiffuse(dif, spec);
@@ -150,6 +150,7 @@ float3 ggxIndirect(inout uint rndSeed, float3 hit, float3 N, float3 noNormalN, f
 	{
 		// Shoot a randomly selected cosine-sampled diffuse ray.
 		float3 L = getCosHemisphereSample(rndSeed, N);
+		wo = L;
 		float3 bounceColor = shootIndirectRay(hit, L, gMinT, 0, rndSeed, rayDepth);
 
 		// Check to make sure our randomly selected, normal mapped diffuse ray didn't go below the surface.
@@ -167,6 +168,8 @@ float3 ggxIndirect(inout uint rndSeed, float3 hit, float3 N, float3 noNormalN, f
 
 		// Compute the outgoing direction based on this (perfectly reflective) microfacet
 		float3 L = normalize(2.f * dot(V, H) * H - V);
+
+		wo = L;
 
 		// Compute our color by tracing a ray in this direction
 		float3 bounceColor = shootIndirectRay(hit, L, gMinT, 0, rndSeed, rayDepth);
@@ -216,7 +219,8 @@ void IndirectClosestHit(inout IndirectRayPayload rayData, BuiltInTriangleInterse
 		// Use the same normal for the normal-mapped and non-normal mapped vectors... This means we could get light
 		//     leaks at secondary surfaces with normal maps due to indirect rays going below the surface.  This
 		//     isn't a huge issue, but this is a (TODO: fix)
+		float3 wo;
 		rayData.color += ggxIndirect(rayData.rndSeed, shadeData.posW, shadeData.N, shadeData.N, shadeData.V,
-			shadeData.diffuse, shadeData.specular, shadeData.roughness, rayData.rayDepth);
+			shadeData.diffuse, shadeData.specular, shadeData.roughness, rayData.rayDepth, wo);
 	}
 }

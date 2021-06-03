@@ -21,8 +21,7 @@
 namespace {
 	const char *kAccumShader = "Tutorial14\\cameramoveacc.ps.hlsl";
 	const char *kSUpdateShader = "Tutorial14\\sampleupdate.ps.hlsl";
-	const char *kNormalWoStore = "Tutorial14\\normalwostore.ps.hlsl";
-	const char *kDepthRoughStore = "Tutorial14\\depthroughstore.ps.hlsl";
+	const char *kInfoStoreShader = "Tutorial14\\infostore.ps.hlsl";
 	const std::uint8_t MAX_BUFFER_SIZE = 10;
 };
 
@@ -38,18 +37,19 @@ bool CameraMoveAccPass::initialize(RenderContext* pRenderContext, ResourceManage
 
 	// Stash our resource manager; ask for the texture the developer asked us to accumulate
 	mpResManager = pResManager;
-	mpResManager->requestTextureResources({ "WorldNormal", "FirstHitWo", "MaterialSpecRough", "WorldPosition" });
+	mpResManager->requestTextureResources({ "WorldNormal", "FirstHitWo", "MaterialSpecRough", "WorldPosition", "MaterialDiffuse", "MaterialSpecRough", "DirectLighting", "FirstHitWo" });
 	mpResManager->requestTextureResource(mAccumChannel);
 
 	// Create our graphics state and accumulation shader
 	mpGfxState = GraphicsState::create();
 	mpAccumShader = FullscreenLaunch::create(kAccumShader);
 	mpSampleUpdateShader = FullscreenLaunch::create(kSUpdateShader);
-	mpNormalWoStoreShader = FullscreenLaunch::create(kNormalWoStore);
-	mpDepthRoughnessStoreShader = FullscreenLaunch::create(kDepthRoughStore);
+	mpInfoStoreShader = FullscreenLaunch::create(kInfoStoreShader);
 
 	// Our GUI needs less space than other passes, so shrink the GUI window.
 	setGuiSize(ivec2(250, 135));
+
+	depth_thresh_ = 1.f;
 
 	return true;
 }
@@ -69,21 +69,29 @@ void CameraMoveAccPass::initScene(RenderContext* pRenderContext, Scene::SharedPt
 
 void CameraMoveAccPass::resize(uint32_t width, uint32_t height)
 {
-	mpLastFrames.clear();
-	mpLastFramesMat1.clear();
-	mpLastFramesMat2.clear();
+	mpLastFrameRenders.clear();
+	mpLastFrameDepthRough.clear();
+	mpLastFrameNorm.clear();
+	mpLastFrameWo.clear();
+	mpLastFrameDirect.clear();
 	mpLastCameras.clear();
 
 	for (std::uint8_t i = 0; i < MAX_BUFFER_SIZE; ++i) {
-		mpLastFrames.push_back(Texture::create2D(width, height, ResourceFormat::RGBA32Float, 1, 1, nullptr,
+		mpLastFrameRenders.push_back(Texture::create2D(width, height, ResourceFormat::RGBA32Float, 1, 1, nullptr,
 			Resource::BindFlags::ShaderResource | Resource::BindFlags::UnorderedAccess | Resource::BindFlags::RenderTarget));
 
 		//roughness and depth
-		mpLastFramesMat1.push_back(Texture::create2D(width, height, ResourceFormat::RG32Float, 1, 1, nullptr,
+		mpLastFrameDepthRough.push_back(Texture::create2D(width, height, ResourceFormat::RG32Float, 1, 1, nullptr,
 			Resource::BindFlags::ShaderResource | Resource::BindFlags::UnorderedAccess | Resource::BindFlags::RenderTarget));
 
 		//normal and wo
-		mpLastFramesMat2.push_back(Texture::create2D(width, height, ResourceFormat::RGBA32Float, 1, 1, nullptr,
+		mpLastFrameNorm.push_back(Texture::create2D(width, height, ResourceFormat::RGBA32Float, 1, 1, nullptr,
+			Resource::BindFlags::ShaderResource | Resource::BindFlags::UnorderedAccess | Resource::BindFlags::RenderTarget));
+
+		mpLastFrameWo.push_back(Texture::create2D(width, height, ResourceFormat::RGBA32Float, 1, 1, nullptr,
+			Resource::BindFlags::ShaderResource | Resource::BindFlags::UnorderedAccess | Resource::BindFlags::RenderTarget));
+
+		mpLastFrameDirect.push_back(Texture::create2D(width, height, ResourceFormat::RGBA32Float, 1, 1, nullptr,
 			Resource::BindFlags::ShaderResource | Resource::BindFlags::UnorderedAccess | Resource::BindFlags::RenderTarget));
 
 		mpLastCameras.push_back(Camera::create());
@@ -101,13 +109,14 @@ void CameraMoveAccPass::resize(uint32_t width, uint32_t height)
 	mpInternalFbo = ResourceManager::createFbo(width, height, ResourceFormat::RGBA32Float);
 	mpGfxState->setFbo(mpInternalFbo);
 
-	mpDepthRoughnessFbo = ResourceManager::createFbo(width, height, ResourceFormat::RG16Float);
-
 	// Whenever we resize, we'd better force accumulation to restart
 	mAccumCount = 0;
 
 	mbCurrentBufferPos = 0;
 	mbCurrentBufferSize = 0;
+
+	width_ = width;
+	height_ = height;
 }
 
 void CameraMoveAccPass::renderGui(Gui* pGui)
@@ -154,17 +163,27 @@ void CameraMoveAccPass::execute(RenderContext* pRenderContext)
 		//backproject last frame positions and update accum texture here with reweight etc.
 		auto supdateVars = mpSampleUpdateShader->getVars();
 
+		mpSampleUpdateShader->setCamera(mpScene->getActiveCamera());
+
 		supdateVars["SUpdateCB"]["gCurrentBufferSize"] = int(mbCurrentBufferSize);
 		supdateVars["gPos"] = mpResManager->getTexture("WorldPosition");
+		supdateVars["gMatDif"] = mpResManager->getTexture("MaterialDiffuse");
+		supdateVars["gMatSpec"] = mpResManager->getTexture("MaterialSpecRough");
+		supdateVars["SUpdateCB"]["gImageWidth"] = width_;
+		supdateVars["SUpdateCB"]["gImageHeight"] = height_;
+		supdateVars["SUpdateCB"]["dthresh"] = depth_thresh_;
 
 		for (std::uint8_t i = 0; i < mbCurrentBufferSize; ++i) {
-			supdateVars["SUpdateCB"]["gUsePrevBuffer"] = i > 0;
-
 			int idx = (mbCurrentBufferPos + i) % mbCurrentBufferSize;
-			supdateVars["gPrevRender"] = mpLastFrames[idx];
-			supdateVars["gNormalWo"] = mpLastFramesMat1[idx]; 
-			supdateVars["gDepthRoughness"] = mpLastFramesMat2[idx];
-			mpSampleUpdateShader->setCamera(mpLastCameras[idx]);
+
+			supdateVars["SUpdateCB"]["gUsePrevBuffer"] = i > 0;
+			ConstantBuffer::SharedPtr supdateCB = supdateVars["SUpdateCB"];
+			mpLastCameras[idx]->setIntoConstantBuffer(supdateCB.get(), "gSampleCamera");
+			supdateVars["gPrevRender"] = mpLastFrameRenders[idx];
+			supdateVars["gPrevDirect"] = mpLastFrameDirect[idx];
+			supdateVars["gNormal"] = mpLastFrameNorm[idx];
+			supdateVars["gWo"] = mpLastFrameWo[idx];
+			supdateVars["gDepthRough"] = mpLastFrameDepthRough[idx];
 
 			//may have to ping pong this
 			supdateVars["prevAccum"] = mpSUpdatePingPong[i % 2];
@@ -176,22 +195,21 @@ void CameraMoveAccPass::execute(RenderContext* pRenderContext)
 	}
 
 	//save last n frames to account for moving
-	pRenderContext->blit(inputTexture->getSRV(), mpLastFrames[mbCurrentBufferPos]->getRTV());
+	pRenderContext->blit(inputTexture->getSRV(), mpLastFrameRenders[mbCurrentBufferPos]->getRTV());
 
-	auto nwoVars = mpNormalWoStoreShader->getVars();
-	nwoVars["normals"] = mpResManager->getTexture("WorldNormal");
-	nwoVars["wo"] = mpResManager->getTexture("FirstHitWo");
-	mpNormalWoStoreShader->execute(pRenderContext, mpGfxState);
-	pRenderContext->blit(mpInternalFbo->getColorTexture(0)->getSRV(), mpLastFramesMat1[mbCurrentBufferPos]->getRTV());
+	auto isVars = mpInfoStoreShader->getVars();
+	isVars["normals"] = mpResManager->getTexture("WorldNormal");
+	isVars["firstHitWo"] = mpResManager->getTexture("FirstHitWo");
+	isVars["worldpos"] = mpResManager->getTexture("WorldPosition");
+	isVars["roughness"] = mpResManager->getTexture("MaterialSpecRough");
+	isVars["direct"] = mpResManager->getTexture("DirectLighting");
 
-	mpGfxState->setFbo(mpDepthRoughnessFbo);
-	auto drVars = mpDepthRoughnessStoreShader->getVars();
-	nwoVars["worldpos"] = mpResManager->getTexture("WorldPosition");
-	nwoVars["roughness"] = mpResManager->getTexture("MaterialSpecRough");
-	mpDepthRoughnessStoreShader->execute(pRenderContext, mpGfxState);
-	pRenderContext->blit(mpDepthRoughnessFbo->getColorTexture(0)->getSRV(), mpLastFramesMat2[mbCurrentBufferPos]->getRTV());
+	isVars["depthrough"] = mpLastFrameDepthRough[mbCurrentBufferPos];
+	isVars["norm"] = mpLastFrameNorm[mbCurrentBufferPos];
+	isVars["wo"] = mpLastFrameWo[mbCurrentBufferPos];
+	isVars["directOut"] = mpLastFrameDirect[mbCurrentBufferPos];
 
-	mpGfxState->setFbo(mpInternalFbo);
+	mpInfoStoreShader->execute(pRenderContext, mpGfxState);
 
 	*mpLastCameras[mbCurrentBufferPos] = *mpScene->getActiveCamera();
 

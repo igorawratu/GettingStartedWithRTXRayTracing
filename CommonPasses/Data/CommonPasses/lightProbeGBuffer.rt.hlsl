@@ -58,7 +58,7 @@ shared RWTexture2D<float4> gMatDif;
 shared RWTexture2D<float4> gMatSpec;
 shared RWTexture2D<float4> gMatExtra;
 shared RWTexture2D<float4> gMatEmissive;
-
+shared RWTexture2D<float4> gFirstHitWo;
 
 [shader("miss")]
 void PrimaryMiss(inout SimpleRayPayload hitData)
@@ -120,7 +120,8 @@ void GBufferRayGen()
 
 	// Convert our ray index into a ray direction in world space
 	float2 pixelCenter = (launchIndex + gPixelJitter) / launchDim;
-	float2 ndc = float2(2, -2) * pixelCenter + float2(-1, 1);                    
+	float2 ndc = float2(2, -2) * pixelCenter + float2(-1, 1);      
+	              
 	float3 rayDir = ndc.x * gCamera.cameraU + ndc.y * gCamera.cameraV + gCamera.cameraW;  
 	rayDir /= length(gCamera.cameraW);
 

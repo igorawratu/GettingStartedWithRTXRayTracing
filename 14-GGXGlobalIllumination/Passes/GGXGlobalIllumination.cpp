@@ -41,6 +41,8 @@ bool GGXGlobalIlluminationPass::initialize(RenderContext* pRenderContext, Resour
 	mpResManager = pResManager;
 	mpResManager->requestTextureResources({ "WorldPosition", "WorldNormal", "MaterialDiffuse", "MaterialSpecRough", "MaterialExtraParams", "Emissive" });
 	mpResManager->requestTextureResource(mOutputTextureName);
+	mpResManager->requestTextureResource("DirectLighting", ResourceFormat::RGBA32Float);
+	mpResManager->requestTextureResource("FirstHitWo", ResourceFormat::RGBA32Float);
 	mpResManager->requestTextureResource(ResourceManager::kEnvironmentMap);
 
 	// Set the default scene to load
@@ -106,7 +108,9 @@ void GGXGlobalIlluminationPass::execute(RenderContext* pRenderContext)
 	globalVars["gExtraMatl"]   = mpResManager->getTexture("MaterialExtraParams");
     globalVars["gEmissive"]    = mpResManager->getTexture("Emissive");
 	globalVars["gOutput"]      = pDstTex;
-	globalVars["gEnvMap"] = mpResManager->getTexture(ResourceManager::kEnvironmentMap);
+	globalVars["gDirect"]	   = mpResManager->getTexture("DirectLighting");
+	globalVars["gFhwo"]		   = mpResManager->getTexture("FirstHitWo");
+	globalVars["gEnvMap"]	   = mpResManager->getTexture(ResourceManager::kEnvironmentMap);
 
 	// Shoot our rays and shade our primary hit points
 	mpRays->execute( pRenderContext, mpResManager->getScreenSize() );
