@@ -85,4 +85,5 @@ protected:
 
 	int width_ = 1, height_ = 1;
 	float depth_thresh_;
+	float col_thresh_;
 };

@@ -9,11 +9,12 @@ cbuffer SUpdateCB
 	bool gUsePrevBuffer;
     int gImageWidth;
     int gImageHeight;
-    float dthresh;
+    float gDThresh;
 }
 
 Texture2D<float4> gPos;
 Texture2D<float4> gPrevRender;
+Texture2D<float4> gCurrRender;
 Texture2D<float4> gPrevDirect;
 Texture2D<float4> gNormal;
 Texture2D<float4> gWo;
@@ -38,14 +39,34 @@ float probabilityToSampleDiffuse(float3 difColor, float3 specColor)
     return lumDiffuse / (lumDiffuse + lumSpecular);
 }
 
+float2 UVFromRGB(float3 rgbcol)
+{
+    rgbcol *= 255;
+
+    float2 uvcol;
+    uvcol.x = -0.148 * rgbcol.r - 0.291 * rgbcol.g + 0.439 * rgbcol.b + 128;
+    uvcol.y =  0.439 * rgbcol.r - 0.368 * rgbcol.g - 0.071 * rgbcol.b + 128;
+
+    return uvcol / 255;
+}
+
+float colDistanceChrom(float3 c1, float3 c2){
+    float2 c1uv = UVFromRGB(c1);
+    float2 c2uv = UVFromRGB(c2);
+
+    return length(c1uv - c2uv);
+}
+
 float4 main(float2 texC : TEXCOORD, float4 pos : SV_Position) : SV_Target0
 {
 	//get current world position and compute hypothetical ray to it from previous camera
     uint2 pixelPos = (uint2)pos.xy;
     float4 prevAccum = gUsePrevBuffer ? gPrevAccum[pixelPos] : float4(0, 0, 0, 0);
+    
     float4 position = gPos[pixelPos];
     float4 specCol = gMatSpec[pixelPos];
     float4 difCol = gMatDif[pixelPos];
+    float3 currcol = gCurrRender[pixelPos].xyz;
 
     //find pixel pos of current position to previous render's camera
     float4 local_pos = mul(position, gSampleCamera.viewMat);
@@ -66,16 +87,20 @@ float4 main(float2 texC : TEXCOORD, float4 pos : SV_Position) : SV_Target0
     float2 prevPixelPos = float2((ss_pos.x + 1) / 2 * gImageWidth, (ss_pos.y + 1) / 2 * gImageHeight);
     float3 norm = gNormal[prevPixelPos].xyz;
     float3 wo = gWo[prevPixelPos].xyz;
+    float4 posrough = gDepthRough[prevPixelPos];
+    float3 prevcol = gPrevRender[prevPixelPos].rgb;
 
     //check for discontinuities in depth to decide if discard is needed
-    float prevDepth = gDepthRough[prevPixelPos].x;
-    float currDepth = length(position.xyz - gCamera.posW);
-    /*if(abs(prevDepth - currDepth) > dthresh){
+    float pointDist = length(posrough.xyz - position.xyz);
+
+    bool failedDistThresh = pointDist > gDThresh;
+
+    if(failedDistThresh){
         return prevAccum;
-    }*/
+    }
 
     //compute roughness, wo, and normal of prev, and wi of current and prev
-    float rough = specCol.w;
+    float rough = posrough.w;
     float3 prevWi = normalize(position.xyz - gSampleCamera.posW);
     float3 wi = normalize(position.xyz - gCamera.posW);
 
@@ -105,12 +130,14 @@ float4 main(float2 texC : TEXCOORD, float4 pos : SV_Position) : SV_Target0
     //or some epsilon..
     if(reweight > 0){
         float3 prevFHDirect = gPrevDirect[prevPixelPos].rgb;
-        float3 col = gPrevRender[prevPixelPos].rgb;
+        float3 col = prevcol;
+        float total_samples = prevAccum.a + 1;
+
         col -= prevFHDirect;
         col *= reweight;
         col += prevFHDirect;
-
-        prevAccum += float4(col, 1);
+        
+        prevAccum = float4((prevAccum.a * prevAccum.rgb + col) / total_samples, total_samples);
     }
 
 	return prevAccum;

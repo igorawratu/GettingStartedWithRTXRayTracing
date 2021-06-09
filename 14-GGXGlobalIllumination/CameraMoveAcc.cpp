@@ -22,7 +22,7 @@ namespace {
 	const char *kAccumShader = "Tutorial14\\cameramoveacc.ps.hlsl";
 	const char *kSUpdateShader = "Tutorial14\\sampleupdate.ps.hlsl";
 	const char *kInfoStoreShader = "Tutorial14\\infostore.ps.hlsl";
-	const std::uint8_t MAX_BUFFER_SIZE = 10;
+	const std::uint8_t MAX_BUFFER_SIZE = 5;
 };
 
 CameraMoveAccPass::CameraMoveAccPass(const std::string &bufferToAccumulate)
@@ -49,7 +49,7 @@ bool CameraMoveAccPass::initialize(RenderContext* pRenderContext, ResourceManage
 	// Our GUI needs less space than other passes, so shrink the GUI window.
 	setGuiSize(ivec2(250, 135));
 
-	depth_thresh_ = 1.f;
+	depth_thresh_ = 0.1f;
 
 	return true;
 }
@@ -81,7 +81,7 @@ void CameraMoveAccPass::resize(uint32_t width, uint32_t height)
 			Resource::BindFlags::ShaderResource | Resource::BindFlags::UnorderedAccess | Resource::BindFlags::RenderTarget));
 
 		//roughness and depth
-		mpLastFrameDepthRough.push_back(Texture::create2D(width, height, ResourceFormat::RG32Float, 1, 1, nullptr,
+		mpLastFrameDepthRough.push_back(Texture::create2D(width, height, ResourceFormat::RGBA32Float, 1, 1, nullptr,
 			Resource::BindFlags::ShaderResource | Resource::BindFlags::UnorderedAccess | Resource::BindFlags::RenderTarget));
 
 		//normal and wo
@@ -169,9 +169,10 @@ void CameraMoveAccPass::execute(RenderContext* pRenderContext)
 		supdateVars["gPos"] = mpResManager->getTexture("WorldPosition");
 		supdateVars["gMatDif"] = mpResManager->getTexture("MaterialDiffuse");
 		supdateVars["gMatSpec"] = mpResManager->getTexture("MaterialSpecRough");
+		supdateVars["gCurrRender"] = inputTexture;
 		supdateVars["SUpdateCB"]["gImageWidth"] = width_;
 		supdateVars["SUpdateCB"]["gImageHeight"] = height_;
-		supdateVars["SUpdateCB"]["dthresh"] = depth_thresh_;
+		supdateVars["SUpdateCB"]["gDThresh"] = depth_thresh_;
 
 		for (std::uint8_t i = 0; i < mbCurrentBufferSize; ++i) {
 			int idx = (mbCurrentBufferPos + i) % mbCurrentBufferSize;
@@ -186,9 +187,9 @@ void CameraMoveAccPass::execute(RenderContext* pRenderContext)
 			supdateVars["gDepthRough"] = mpLastFrameDepthRough[idx];
 
 			//may have to ping pong this
-			supdateVars["prevAccum"] = mpSUpdatePingPong[i % 2];
+			supdateVars["gPrevAccum"] = mpSUpdatePingPong[0];
 			mpSampleUpdateShader->execute(pRenderContext, mpGfxState);
-			pRenderContext->blit(mpInternalFbo->getColorTexture(0)->getSRV(), mpSUpdatePingPong[(i + 1) % 2]->getRTV());
+			pRenderContext->blit(mpInternalFbo->getColorTexture(0)->getSRV(), mpSUpdatePingPong[0]->getRTV());
 		}
 
 		pRenderContext->blit(mpInternalFbo->getColorTexture(0)->getSRV(), mpAccumFrame->getRTV());
