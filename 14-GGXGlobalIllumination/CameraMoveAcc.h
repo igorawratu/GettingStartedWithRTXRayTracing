@@ -79,7 +79,7 @@ protected:
 	bool                          mDoAccumulation = true;
 
 	// How many frames have we accumulated so far?
-	std::uint8_t                  mAccumCount = 0;
+	std::uint32_t                  mAccumCount = 0;
 	std::uint8_t				  mFirstFramePosition = 0;
 	std::uint8_t				  mTotalAccFrames;
 
